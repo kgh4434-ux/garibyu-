@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>리뷰/실주문 분리 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-populate@1.21.0/browser/xlsx-populate.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+<style>
+  :root { --bg:#ffffff; --panel:#ffffff; --line:#e5e7eb; --ink:#111827; --muted:#6b7280; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --acc:#2563eb; --soft:#f9fafb; --new:#7c3aed; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:var(--soft); color:var(--ink); }
+  header { padding:18px 28px; border-bottom:1px solid var(--line); background:var(--panel); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+  header h1 { font-size:18px; margin:0; }
+  header .sub { color:var(--muted); font-size:12px; margin-top:4px; }
+  main { padding:20px 28px; max-width:1480px; margin:0 auto; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+
+  details.guide { margin-bottom:16px; }
+  details.guide summary { cursor:pointer; padding:12px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; font-weight:600; color:#1e40af; font-size:14px; list-style:none; display:flex; align-items:center; gap:8px; }
+  details.guide summary::-webkit-details-marker { display:none; }
+  details.guide summary::before { content:'▸'; transition:.15s; }
+  details.guide[open] summary::before { transform:rotate(90deg); }
+  details.guide .body { padding:14px 18px; border:1px solid var(--line); border-top:none; border-radius:0 0 8px 8px; background:#fff; font-size:13px; line-height:1.7; color:#334155; }
+  details.guide .body h4 { margin:14px 0 6px; font-size:13px; color:#0f172a; }
+  details.guide .body h4:first-child { margin-top:0; }
+  details.guide .body code { background:#f1f5f9; padding:1px 6px; border-radius:4px; font-size:12px; }
+  details.guide .body .warn { background:#fef3c7; border-left:3px solid var(--warn); padding:8px 12px; border-radius:4px; margin:8px 0; }
+  details.guide .body .danger { background:#fee2e2; border-left:3px solid var(--bad); padding:8px 12px; border-radius:4px; margin:8px 0; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .drop { border:2px dashed var(--line); border-radius:8px; padding:20px; text-align:center; cursor:pointer; transition:.15s; }
+  .drop:hover, .drop.dragover { border-color:var(--acc); background:#eff6ff; }
+  .drop input { display:none; }
+  .drop .filename { color:var(--acc); font-size:12px; margin-top:6px; word-break:break-all; }
+  .drop .placeholder { color:var(--muted); font-size:13px; }
+  .card h3 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
+
+  .controls { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; padding:12px 14px; background:var(--panel); border:1px solid var(--line); border-radius:10px; }
+  select, button, input[type=text] { background:#fff; border:1px solid var(--line); color:var(--ink); padding:7px 12px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit; }
+  input[type=text] { cursor:text; }
+  button.primary { background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600; }
+  button.danger { color:var(--bad); border-color:#fecaca; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .ctrl-label { color:var(--muted); font-size:12px; margin-left:6px; }
+
+  .stats { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:14px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .stat .v { font-size:22px; font-weight:700; line-height:1.2; }
+  .stat .l { color:var(--muted); font-size:11px; margin-top:2px; }
+  .stat.ok .v { color:var(--ok); } .stat.bad .v { color:var(--bad); } .stat.warn .v { color:var(--warn); } .stat.new .v { color:var(--new); } .stat.acc .v { color:var(--acc); }
+
+  .tabs { display:flex; border-bottom:1px solid var(--line); background:var(--panel); border-radius:10px 10px 0 0; padding:0 6px; margin-top:6px; }
+  .tab { padding:11px 16px; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; font-size:13px; font-weight:600; }
+  .tab.active { color:var(--ink); border-bottom-color:var(--acc); }
+  .tab .badge { background:#f1f5f9; padding:1px 7px; border-radius:10px; font-size:11px; margin-left:6px; color:var(--ink); }
+
+  .table-wrap { background:var(--panel); border:1px solid var(--line); border-top:none; border-radius:0 0 10px 10px; overflow:auto; max-height:65vh; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { background:var(--soft); position:sticky; top:0; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; z-index:1; }
+  tr:hover td { background:#f8fafc; }
+  tr.done td { opacity:.5; text-decoration:line-through; text-decoration-color:#cbd5e1; }
+  tr.done td .pill, tr.done td .badge-new { opacity:1; text-decoration:none; }
+
+  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .pill.real { background:#dcfce7; color:var(--ok); }
+  .pill.fake { background:#fee2e2; color:var(--bad); }
+  .badge-new { display:inline-block; background:var(--new); color:#fff; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700; margin-left:4px; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+  .toast { position:fixed; bottom:20px; right:20px; background:#0f172a; color:#fff; padding:12px 18px; border-radius:8px; opacity:0; transform:translateY(20px); transition:.2s; pointer-events:none; font-size:13px; z-index:10; max-width:360px; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.err { background:var(--bad); }
+
+  .memo-input { width:140px; padding:3px 6px; font-size:11px; }
+  .check-cell { text-align:center; }
+  input[type=checkbox] { width:16px; height:16px; cursor:pointer; }
+
+  .conn { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+  .conn .dot { width:8px; height:8px; border-radius:50%; background:#94a3b8; }
+  .conn.ok .dot { background:var(--ok); }
+  .conn.err .dot { background:var(--bad); }
+
+  @media(max-width:900px) {
+    .stats { grid-template-columns:repeat(3,1fr); }
+    .grid { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>리뷰/실주문 분리 대시보드 <span style="color:var(--muted);font-size:12px;font-weight:400;">v3 · 공용</span></h1>
+    <div class="sub">3인 공용 누적 처리 · Supabase 동기화 · 5초 폴링</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);">
+    <span class="conn" id="conn"><span class="dot"></span><span id="connText">연결 확인 중…</span></span>
+    <span>오늘: <span id="todayLabel"></span></span>
+  </div>
+</header>
+
+<main>
+  <details class="guide" open>
+    <summary>사용 가이드 (처음 사용 시 펼쳐보세요)</summary>
+    <div class="body">
+      <h4>1. 기본 사용 흐름</h4>
+      ① <b>리뷰리포트</b>(가리뷰 참여자 명단)와 <b>주문 파일</b>(확장주문검색·스마트스토어 발주발송관리 등 자동 인식)을 업로드 →
+      ② <b>[누적 분석]</b> 클릭 →
+      ③ 결과가 <b>실주문 / 가리뷰 / 리뷰참여자</b> 탭으로 분리 →
+      ④ 작업 완료한 건은 <b>완료 체크박스</b>로 표시.
+      <br><br>
+      <b>지원 파일</b>: 헤더에 <code>수취인</code> 또는 <code>수령자</code>가 들어간 어떤 형식이든 자동 인식. 네이버 스마트스토어처럼 <b>비밀번호 0000</b>이 걸려 있어도 자동 해제됩니다.
+
+      <h4>2. 매일 신규건 처리</h4>
+      매일 새 주문 파일이 들어오면 그 파일만 다시 업로드 → <b>[누적 분석]</b>. 기존 누적은 그대로 유지되고 <b>NEW</b> 배지가 붙은 행만 새로 추가됩니다.
+      리뷰리포트가 업데이트되면 함께 업로드 — 누적된 모든 주문에 대해 가리뷰 여부가 자동 재판정됩니다.
+
+      <h4>3. 오늘/어제 구분</h4>
+      각 주문에는 <b>처음 업로드된 날짜</b>(_수집일자)가 기록됩니다. 상단 <b>날짜 필터</b>로 오늘/어제/최근 7일/전체를 골라 볼 수 있습니다.
+
+      <h4>4. 완료 처리 (3명 실시간 공유)</h4>
+      행 첫 컬럼의 체크박스를 클릭하면 즉시 서버에 저장되고, <b>다른 PC에서 5초 안에 자동 반영</b>됩니다. 메모 칸에 송장번호·작업메모를 적어도 동일하게 공유됩니다.
+
+      <h4>5. 백업 / 복원</h4>
+      <b>[백업 다운로드]</b>로 누적 데이터를 JSON 파일로 저장하세요. <b>[백업 복원]</b>은 복원 파일과 같은 주문번호가 있으면 덮어쓰지 않고 신규만 병합합니다.
+
+      <h4>6. 매칭 키 변경</h4>
+      기본은 <b>전화 끝 4자리</b>. 끝자리 우연 충돌이 우려되면 <b>전화 끝4 + 이름2자</b>로 바꾸고 [누적 분석]을 다시 누르면 모든 행이 재평가됩니다.
+
+      <div class="warn"><b>⚠ 운영 유의사항</b><br>
+      · 데이터는 <b>3명이 공유</b>합니다. [전체 초기화]는 모두에게 영향. 신중히.<br>
+      · 같은 주문번호의 신규 업로드는 <b>덮어쓰지 않고 무시</b>됩니다(완료/메모 보존). 강제 재처리는 [전체 초기화] 후 다시 업로드.<br>
+      · 5초마다 자동 동기화됩니다. 다른 사람이 동시에 같은 행을 수정하면 마지막 변경이 이깁니다.</div>
+
+      <div class="danger"><b>⚠ 보안 유의사항</b><br>
+      · 이 URL을 아는 누구나 데이터(수령자 주소·전화 끝자리 등 개인정보 포함)에 접근할 수 있습니다. <b>3명 외부로 절대 공유 금지</b>.<br>
+      · 메일/카톡/문서에 URL 평문 기재 시 외부 노출 위험. 비밀 메모/패스워드 매니저 사용 권장.<br>
+      · 보안 강화가 필요하면 Supabase Auth 도입을 요청하세요.</div>
+    </div>
+  </details>
+
+  <div class="grid">
+    <div class="card">
+      <h3>① 리뷰리포트 (.xlsx) — 가리뷰 참여자</h3>
+      <div class="drop" id="drop1">
+        <input type="file" id="f1" accept=".xlsx,.xls" />
+        <div class="placeholder">클릭 또는 드래그</div>
+        <div class="filename" id="n1"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>② 주문 파일 (.xls/.xlsx) — 자동 형식 인식, 0000 자동 해제</h3>
+      <div class="drop" id="drop2">
+        <input type="file" id="f2" accept=".xlsx,.xls" />
+        <div class="placeholder">클릭 또는 드래그</div>
+        <div class="filename" id="n2"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="run" disabled>누적 분석</button>
+    <span class="ctrl-label">매칭키:</span>
+    <select id="matchKey">
+      <option value="tail4">전화 끝 4자리 (권장)</option>
+      <option value="tail4name">전화 끝4 + 이름2자</option>
+      <option value="zipname">우편번호 + 이름2자</option>
+    </select>
+    <span style="width:1px;height:20px;background:var(--line);margin:0 4px;"></span>
+    <span class="ctrl-label">날짜:</span>
+    <select id="dateFilter">
+      <option value="all">전체</option>
+      <option value="today">오늘만</option>
+      <option value="yesterday">어제만</option>
+      <option value="7d">최근 7일</option>
+    </select>
+    <span class="ctrl-label">상태:</span>
+    <select id="statusFilter">
+      <option value="all">전체</option>
+      <option value="todo">미처리만</option>
+      <option value="done">완료만</option>
+    </select>
+    <input type="text" id="search" placeholder="검색 (이름·전화·주문번호)" style="min-width:200px;" />
+    <span style="margin-left:auto;"></span>
+    <button id="exportBtn">엑셀 다운로드</button>
+    <button id="backupBtn">백업 다운로드</button>
+    <button id="restoreBtn">백업 복원</button>
+    <input type="file" id="restoreFile" accept=".json" style="display:none;" />
+    <button class="danger" id="resetBtn">전체 초기화</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat acc"><div class="v" id="totOrders">0</div><div class="l">누적 주문</div></div>
+    <div class="stat ok"><div class="v" id="totReal">0</div><div class="l">실주문</div></div>
+    <div class="stat bad"><div class="v" id="totFake">0</div><div class="l">가리뷰</div></div>
+    <div class="stat warn"><div class="v" id="totTodo">0</div><div class="l">미처리</div></div>
+    <div class="stat ok"><div class="v" id="totDone">0</div><div class="l">완료</div></div>
+    <div class="stat new"><div class="v" id="totNew">0</div><div class="l">오늘 신규</div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="real">실주문 <span class="badge" id="bReal">0</span></div>
+    <div class="tab" data-tab="fake">가리뷰 <span class="badge" id="bFake">0</span></div>
+    <div class="tab" data-tab="reviewers">리뷰참여자 누적 <span class="badge" id="bRev">0</span></div>
+  </div>
+  <div class="table-wrap">
+    <div id="tableArea"><div class="empty">서버에서 데이터 로드 중…</div></div>
+  </div>
+  <div style="margin-top:8px;color:var(--muted);font-size:11px;" id="status"></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// 리뷰/실주문 누적 분리 대시보드 — Supabase 공용 버전
+// ============================================================
+const SUPA_URL = "https://fpzztnkicdjrwnbvwzwc.supabase.co";
+const SUPA_KEY = "sb_publishable_z5wRhXdj9M-flxdrAD5GOw_FrILYTM0";
+const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
+const $ = id => document.getElementById(id);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const yesterdayStr = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+
+let file1Data = null, file2Data = null;
+let cache = { orders: [], reviewers: [] };
+let currentTab = 'real';
+let pollTimer = null;
+
+$('todayLabel').textContent = todayStr();
+$('matchKey').value = localStorage.getItem('reviewDash.matchKey') || 'tail4';
+
+function setConn(state, msg) {
+  const c = $('conn'); c.classList.remove('ok','err');
+  if (state === 'ok') c.classList.add('ok');
+  else if (state === 'err') c.classList.add('err');
+  $('connText').textContent = msg;
+}
+function toast(msg, isErr) {
+  const t = $('toast'); t.textContent = msg; t.classList.toggle('err', !!isErr); t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function digits(s) { return String(s ?? '').replace(/\D/g, ''); }
+function tail4(s) { const d = digits(s); return d.length >= 4 ? d.slice(-4) : ''; }
+function name2(s) { return String(s ?? '').replace(/[^가-힣a-zA-Z]/g, '').slice(0, 2); }
+
+function buildMatchKey(row, type, mode) {
+  const phoneField = type === 'reviewer' ? row['연락처'] : (row.__phone ?? row['수령자휴대폰'] ?? row['수취인연락처1']);
+  const nameField  = type === 'reviewer' ? row['수취인'] : (row.__name  ?? row['수령자이름']   ?? row['수취인명']);
+  const zipField   = type === 'reviewer'
+    ? (String(row['배송지'] ?? '').match(/\((\d{5})\)/) || [])[1]
+    : (row.__zip ?? row['수령자우편번호'] ?? row['우편번호']);
+  const t = tail4(phoneField);
+  const n = name2(nameField);
+  const z = String(zipField ?? '').trim();
+  if (mode === 'tail4') return t || null;
+  if (mode === 'tail4name') return t && n ? `${t}|${n}` : null;
+  if (mode === 'zipname') return z && n ? `${z}|${n}` : null;
+  return null;
+}
+
+function parseReviewFile(wb) {
+  const reviewers = [];
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    if (rows.length < 5) continue;
+    const headerIdx = rows.findIndex(r => r && r.includes('수취인'));
+    if (headerIdx < 0) continue;
+    const header = rows[headerIdx].map(h => (h ?? '').toString().trim());
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r) continue;
+      const obj = { 시트: sheetName };
+      header.forEach((h, j) => { if (h) obj[h] = r[j]; });
+      if (obj['수취인'] && obj['연락처']) reviewers.push(obj);
+    }
+  }
+  return reviewers;
+}
+
+// 다양한 형식의 주문 파일을 자동 인식해 표준 키(__order_id, __name, __phone, __addr, __zip)로 정규화
+const ORDER_ALIAS = {
+  order_id: ['상품주문번호', '주문번호', '관리번호'],  // 라인 단위 고유 ID 우선 (같은 결제 다상품 보존)
+  name:     ['수령자이름', '수취인명', '수취인'],
+  phone:    ['수령자휴대폰', '수취인연락처1', '수취인연락처', '수령자전화', '연락처'],
+  addr:     ['수령자주소', '통합배송지', '기본배송지', '배송지'],
+  zip:      ['수령자우편번호', '우편번호'],
+  product:  ['상품명'],
+  invoice:  ['송장번호'],
+};
+function pick(obj, keys) {
+  for (const k of keys) {
+    const v = obj[k];
+    if (v != null && String(v).trim() !== '') return v;
+  }
+  return null;
+}
+function parseOrderFile(wb) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  // 헤더 행 자동 탐지 — alias 컬럼명과 정확히 일치하는 셀이 2개 이상인 행
+  const HEADER_KEYS = new Set([].concat(
+    ORDER_ALIAS.order_id, ORDER_ALIAS.name, ORDER_ALIAS.phone,
+    ORDER_ALIAS.addr, ORDER_ALIAS.zip, ORDER_ALIAS.product, ORDER_ALIAS.invoice
+  ));
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(8, raw.length); i++) {
+    const r = raw[i] || [];
+    let hits = 0;
+    for (const c of r) {
+      if (typeof c === 'string' && HEADER_KEYS.has(c.trim())) hits++;
+    }
+    if (hits >= 2) { headerIdx = i; break; }
+  }
+  if (headerIdx < 0) return [];
+  const header = raw[headerIdx].map(h => (h ?? '').toString().trim());
+
+  const orders = [];
+  for (let i = headerIdx + 1; i < raw.length; i++) {
+    const r = raw[i];
+    if (!r || r.every(v => v == null || String(v).trim() === '')) continue;
+    const obj = {};
+    header.forEach((h, j) => { if (h) obj[h] = r[j]; });
+    if (String(obj['관리번호'] ?? '').trim() === '합계') continue;
+    obj.__order_id = pick(obj, ORDER_ALIAS.order_id);
+    obj.__name     = pick(obj, ORDER_ALIAS.name);
+    obj.__phone    = pick(obj, ORDER_ALIAS.phone);
+    obj.__addr     = pick(obj, ORDER_ALIAS.addr);
+    obj.__zip      = pick(obj, ORDER_ALIAS.zip);
+    obj.__product  = pick(obj, ORDER_ALIAS.product);
+    obj.__invoice  = pick(obj, ORDER_ALIAS.invoice);
+    if (!obj.__order_id) continue;
+    orders.push(obj);
+  }
+  return orders;
+}
+
+// 암호화 xlsx면 0000으로 자동 해제 시도 (네이버 다운로드 기본값)
+async function loadFile(file) {
+  const buf = await file.arrayBuffer();
+  try {
+    return XLSX.read(buf, { type: 'array', cellDates: false });
+  } catch (e) {
+    if (typeof XlsxPopulate === 'undefined') throw e;
+    try {
+      const wb = await XlsxPopulate.fromDataAsync(buf, { password: '0000' });
+      const decrypted = await wb.outputAsync();
+      return XLSX.read(decrypted, { type: 'array', cellDates: false });
+    } catch (e2) {
+      throw new Error('파일 읽기 실패. 암호 해제도 실패(0000 시도): ' + (e2.message || e2));
+    }
+  }
+}
+
+function setDrop(dropId, inputId, nameId, slot) {
+  const drop = $(dropId), inp = $(inputId), nameEl = $(nameId);
+  // div 클릭 시 file picker 열기 (input 이벤트 버블 방지)
+  drop.addEventListener('click', e => { if (e.target !== inp) inp.click(); });
+  // dragenter/dragover 모두 preventDefault — 일부 브라우저는 dragenter 처리 안 하면 drop 미발생
+  drop.addEventListener('dragenter', e => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', e => { if (e.target === drop) drop.classList.remove('dragover'); });
+  drop.addEventListener('drop', async e => {
+    e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover');
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    await handleFile(f, nameEl, slot);
+  });
+  inp.addEventListener('change', async () => {
+    const f = inp.files[0]; if (!f) return;
+    await handleFile(f, nameEl, slot);
+  });
+}
+async function handleFile(f, nameEl, slot) {
+  nameEl.textContent = `로드 중: ${f.name}`;
+  try {
+    const wb = await loadFile(f);
+    if (slot === 1) file1Data = wb; else file2Data = wb;
+    nameEl.textContent = `✓ ${f.name}`;
+    $('run').disabled = !(file1Data || file2Data);
+  } catch (e) {
+    nameEl.textContent = `✗ 읽기 실패: ${e.message}`;
+  }
+}
+
+// ============ Supabase I/O ============
+async function fetchAll() {
+  const [oRes, rRes] = await Promise.all([
+    sb.from('review_orders').select('*').order('collected_date', { ascending: false }).limit(20000),
+    sb.from('review_reviewers').select('*').limit(20000),
+  ]);
+  if (oRes.error) throw oRes.error;
+  if (rRes.error) throw rRes.error;
+  cache.orders = oRes.data || [];
+  cache.reviewers = rRes.data || [];
+}
+
+async function runAnalysis() {
+  const mode = $('matchKey').value;
+  localStorage.setItem('reviewDash.matchKey', mode);
+  const today = todayStr();
+  $('run').disabled = true;
+  try {
+    await fetchAll();
+
+    let newReviewers = 0;
+    if (file1Data) {
+      const reviewers = parseReviewFile(file1Data);
+      const existingKeys = new Set(cache.reviewers.map(r => r.match_key));
+      const newRows = [];
+      for (const r of reviewers) {
+        const k = buildMatchKey(r, 'reviewer', mode);
+        if (!k || existingKeys.has(k)) continue;
+        newRows.push({ match_key: k, data: r, collected_date: today });
+        existingKeys.add(k);
+        newReviewers++;
+      }
+      if (newRows.length) {
+        const { error } = await sb.from('review_reviewers').insert(newRows);
+        if (error) throw error;
+      }
+    }
+
+    let newOrders = 0;
+    if (file2Data) {
+      const orders = parseOrderFile(file2Data);
+      const existingIds = new Set(cache.orders.map(o => o.order_id));
+      const newRows = [];
+      for (const o of orders) {
+        const id = String(o.__order_id ?? o['주문번호'] ?? o['상품주문번호'] ?? o['관리번호'] ?? '').trim();
+        if (!id || existingIds.has(id)) continue;
+        newRows.push({ order_id: id, data: o, category: '실주문', collected_date: today, status: '미처리', memo: '' });
+        existingIds.add(id);
+        newOrders++;
+      }
+      if (newRows.length) {
+        const { error } = await sb.from('review_orders').insert(newRows);
+        if (error) throw error;
+      }
+    }
+
+    // 누적 모든 주문 재평가
+    await fetchAll();
+    const reviewerMap = new Map();
+    for (const r of cache.reviewers) reviewerMap.set(r.match_key, r);
+    const updates = [];
+    for (const o of cache.orders) {
+      const k = buildMatchKey(o.data, 'order', mode);
+      const matched = k ? reviewerMap.get(k) : null;
+      const newCat = matched ? '가리뷰' : '실주문';
+      const md = matched ? matched.data : null;
+      const need =
+        o.category !== newCat ||
+        (o.match_key || null) !== (k || null) ||
+        (o.participant_id || null) !== ((md && md['참여ID']) || null) ||
+        (o.review_sheet || null) !== ((md && md['시트']) || null);
+      if (need) {
+        updates.push({
+          order_id: o.order_id,
+          data: o.data,
+          category: newCat,
+          match_key: k || null,
+          participant_id: (md && md['참여ID']) || null,
+          review_sheet: (md && md['시트']) || null,
+          origin_name: (md && md['수취인']) || null,
+          origin_phone: (md && md['연락처']) || null,
+          collected_date: o.collected_date,
+          status: o.status,
+          memo: o.memo,
+        });
+      }
+    }
+    if (updates.length) {
+      const { error } = await sb.from('review_orders').upsert(updates, { onConflict: 'order_id' });
+      if (error) throw error;
+    }
+
+    await fetchAll();
+    refresh();
+    $('status').textContent = `매칭키: ${mode} · 누적 리뷰자 ${cache.reviewers.length}명 · 누적 주문 ${cache.orders.length}건 (이번: 주문 +${newOrders}, 리뷰자 +${newReviewers}, 재평가 ${updates.length})`;
+    toast(`분석 완료 — 신규 주문 ${newOrders}건`);
+  } catch (e) {
+    console.error(e);
+    toast('분석 실패: ' + (e.message || e), true);
+  } finally {
+    $('run').disabled = !(file1Data || file2Data);
+  }
+}
+
+async function setStatus(id, status) {
+  const { error } = await sb.from('review_orders').update({ status, updated_at: new Date().toISOString() }).eq('order_id', id);
+  if (error) toast('상태 저장 실패: ' + error.message, true);
+}
+async function setMemo(id, memo) {
+  const { error } = await sb.from('review_orders').update({ memo, updated_at: new Date().toISOString() }).eq('order_id', id);
+  if (error) toast('메모 저장 실패: ' + error.message, true);
+}
+
+// ============ UI ============
+function dbToUi(row) {
+  return {
+    ...row.data,
+    _수집일자: row.collected_date,
+    _상태: row.status,
+    _메모: row.memo || '',
+    _구분: row.category,
+    _매칭키: row.match_key || '',
+    _참여ID: row.participant_id || '',
+    _리뷰시트: row.review_sheet || '',
+    _원본수취인: row.origin_name || '',
+    _원본연락처: row.origin_phone || '',
+    _orderId: row.order_id,
+  };
+}
+function dbReviewerToUi(row) {
+  return { ...row.data, _수집일자: row.collected_date, _매칭키: row.match_key };
+}
+
+function applyFilters(rows) {
+  const dateF = $('dateFilter').value;
+  const statusF = $('statusFilter').value;
+  const q = $('search').value.trim().toLowerCase();
+  const today = todayStr();
+  const yesterday = yesterdayStr();
+  const sevenDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
+  return rows.filter(r => {
+    const d = r._수집일자 || '';
+    if (dateF === 'today' && d !== today) return false;
+    if (dateF === 'yesterday' && d !== yesterday) return false;
+    if (dateF === '7d' && d < sevenDaysAgo) return false;
+    if (statusF === 'todo' && r._상태 === '완료') return false;
+    if (statusF === 'done' && r._상태 !== '완료') return false;
+    if (q) {
+      const blob = [r['수령자이름'], r['수령자휴대폰'], r['주문번호'], r['관리번호'], r['상품명'], r['수령자주소'], r._메모].join(' ').toLowerCase();
+      if (!blob.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function refresh() {
+  const realRows = cache.orders.filter(o => o.category === '실주문');
+  const fakeRows = cache.orders.filter(o => o.category === '가리뷰');
+  const today = todayStr();
+  $('totOrders').textContent = cache.orders.length;
+  $('totReal').textContent = realRows.length;
+  $('totFake').textContent = fakeRows.length;
+  $('totTodo').textContent = cache.orders.filter(o => o.status !== '완료').length;
+  $('totDone').textContent = cache.orders.filter(o => o.status === '완료').length;
+  $('totNew').textContent = cache.orders.filter(o => o.collected_date === today).length;
+  $('bReal').textContent = realRows.length;
+  $('bFake').textContent = fakeRows.length;
+  $('bRev').textContent = cache.reviewers.length;
+  renderTab(currentTab);
+}
+
+function renderTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  let data;
+  if (tab === 'real') data = cache.orders.filter(o => o.category === '실주문').map(dbToUi);
+  else if (tab === 'fake') data = cache.orders.filter(o => o.category === '가리뷰').map(dbToUi);
+  else data = cache.reviewers.map(dbReviewerToUi);
+
+  if (tab !== 'reviewers') data = applyFilters(data);
+  data.sort((a, b) => (b._수집일자 || '').localeCompare(a._수집일자 || ''));
+
+  const area = $('tableArea');
+  if (!data || data.length === 0) {
+    area.innerHTML = `<div class="empty">데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const today = todayStr();
+  const isOrderTab = tab !== 'reviewers';
+
+  const priorityCols = isOrderTab
+    ? ['_수집일자', '_메모', '_구분',
+       '주문번호', '상품주문번호', '관리번호',
+       '수령자이름', '수취인명',
+       '수령자휴대폰', '수취인연락처1',
+       '송장번호', '상품명',
+       '수령자주소', '통합배송지',
+       '_참여ID', '_매칭키']
+    : ['_수집일자', '시트', '수취인', '연락처', '참여ID', '배송지', '결제금액'];
+  const allCols = new Set();
+  data.forEach(r => Object.keys(r).forEach(k => { if (k !== '_orderId' && k !== '_상태') allCols.add(k); }));
+  const orderedCols = [...priorityCols.filter(c => allCols.has(c)), ...[...allCols].filter(c => !priorityCols.includes(c))];
+
+  let html = '<table><thead><tr>';
+  if (isOrderTab) html += '<th class="check-cell">완료</th>';
+  for (const c of orderedCols) html += `<th>${c}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const row of data) {
+    const isDone = row._상태 === '완료';
+    const isNew = row._수집일자 === today;
+    const id = row._orderId || '';
+    html += `<tr class="${isDone ? 'done' : ''}" data-id="${id}">`;
+    if (isOrderTab) {
+      html += `<td class="check-cell"><input type="checkbox" data-action="toggle" data-id="${id}" ${isDone ? 'checked' : ''} /></td>`;
+    }
+    for (const c of orderedCols) {
+      const v = row[c];
+      let cell = v == null ? '' : String(v);
+      if (c === '_구분') {
+        cell = `<span class="pill ${v === '실주문' ? 'real' : 'fake'}">${v}</span>`;
+        if (isNew) cell += `<span class="badge-new">NEW</span>`;
+      } else if (c === '_수집일자' && isNew) {
+        cell = `${cell}<span class="badge-new">오늘</span>`;
+      } else if (c === '_메모' && isOrderTab) {
+        const safe = (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+        cell = `<input type="text" class="memo-input" data-action="memo" data-id="${id}" value="${safe}" />`;
+      }
+      html += `<td>${cell}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  area.innerHTML = html;
+
+  area.querySelectorAll('input[data-action="toggle"]').forEach(el => {
+    el.addEventListener('change', async e => {
+      const id = e.target.dataset.id;
+      const newStatus = e.target.checked ? '완료' : '미처리';
+      // 낙관적 업데이트
+      const o = cache.orders.find(x => x.order_id === id);
+      if (o) { o.status = newStatus; refresh(); }
+      await setStatus(id, newStatus);
+    });
+  });
+  area.querySelectorAll('input[data-action="memo"]').forEach(el => {
+    el.addEventListener('change', async e => {
+      const id = e.target.dataset.id;
+      const o = cache.orders.find(x => x.order_id === id);
+      if (o) o.memo = e.target.value;
+      await setMemo(id, e.target.value);
+    });
+  });
+}
+
+function exportExcel() {
+  const real = cache.orders.filter(o => o.category === '실주문').map(dbToUi);
+  const fake = cache.orders.filter(o => o.category === '가리뷰').map(dbToUi);
+  const reviewers = cache.reviewers.map(dbReviewerToUi);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(real), '실주문');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fake), '가리뷰');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reviewers), '리뷰참여자_누적');
+  const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+  XLSX.writeFile(wb, `리뷰주문분리_${ts}.xlsx`);
+  toast('엑셀 다운로드 완료');
+}
+
+function backup() {
+  const blob = new Blob([JSON.stringify({ orders: cache.orders, reviewers: cache.reviewers }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `리뷰주문_백업_${todayStr()}.json`;
+  a.click();
+  toast('백업 다운로드 완료');
+}
+
+async function restore(file) {
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!Array.isArray(data.orders) || !Array.isArray(data.reviewers)) throw new Error('잘못된 백업 파일');
+    if (!confirm(`백업 복원: 신규 주문 ${data.orders.length}건, 리뷰자 ${data.reviewers.length}명. 기존 동일 주문번호는 유지(병합)됩니다. 진행할까요?`)) return;
+    if (data.reviewers.length) {
+      const { error } = await sb.from('review_reviewers').upsert(data.reviewers, { onConflict: 'match_key', ignoreDuplicates: true });
+      if (error) throw error;
+    }
+    if (data.orders.length) {
+      const { error } = await sb.from('review_orders').upsert(data.orders, { onConflict: 'order_id', ignoreDuplicates: true });
+      if (error) throw error;
+    }
+    await fetchAll(); refresh();
+    toast('복원 완료');
+  } catch (e) { toast('복원 실패: ' + e.message, true); }
+}
+
+async function resetAll() {
+  if (!confirm('⚠ 3명 모두에게 영향 ⚠\n누적된 모든 데이터(주문/리뷰자/완료체크/메모)가 서버에서 삭제됩니다. 진행할까요?')) return;
+  if (!confirm('정말 모든 누적 데이터를 삭제하시겠습니까? (되돌릴 수 없음)')) return;
+  try {
+    const e1 = await sb.from('review_orders').delete().not('order_id', 'is', null);
+    if (e1.error) throw e1.error;
+    const e2 = await sb.from('review_reviewers').delete().not('match_key', 'is', null);
+    if (e2.error) throw e2.error;
+    await fetchAll(); refresh();
+    toast('초기화 완료');
+  } catch (e) { toast('초기화 실패: ' + e.message, true); }
+}
+
+async function poll() {
+  try {
+    await fetchAll();
+    refresh();
+    setConn('ok', `동기화 OK · ${new Date().toLocaleTimeString('ko-KR')}`);
+  } catch (e) {
+    setConn('err', '동기화 실패');
+    console.warn('poll fail', e);
+  }
+}
+
+// 페이지 다른 영역에 파일 떨어뜨릴 때 브라우저 기본동작(파일 열기) 차단
+['dragover','drop'].forEach(t => window.addEventListener(t, e => { e.preventDefault(); }, false));
+
+// 바인딩
+setDrop('drop1', 'f1', 'n1', 1);
+setDrop('drop2', 'f2', 'n2', 2);
+$('run').addEventListener('click', runAnalysis);
+$('exportBtn').addEventListener('click', exportExcel);
+$('backupBtn').addEventListener('click', backup);
+$('restoreBtn').addEventListener('click', () => $('restoreFile').click());
+$('restoreFile').addEventListener('change', e => { if (e.target.files[0]) restore(e.target.files[0]); });
+$('resetBtn').addEventListener('click', resetAll);
+$('dateFilter').addEventListener('change', refresh);
+$('statusFilter').addEventListener('change', refresh);
+$('search').addEventListener('input', refresh);
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => renderTab(t.dataset.tab)));
+
+// 초기 로드 + 폴링 시작
+(async () => {
+  setConn('', '연결 중…');
+  await poll();
+  pollTimer = setInterval(poll, 5000);
+})();
+
+// 페이지 비활성화 시 폴링 일시정지
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+  else if (!pollTimer) { poll(); pollTimer = setInterval(poll, 5000); }
+});
+</script>
+</body>
+</html>
