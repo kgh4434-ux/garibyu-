@@ -728,8 +728,48 @@ async function resetAll() {
   } catch (e) { toast('초기화 실패: ' + e.message, true); }
 }
 
+
 async function poll() {
   try {
     await fetchAll();
     refresh();
-    setConn('ok', `동기화 OK · ${new Date().toLocaleTimeString('ko-
+    setConn('ok', '동기화 OK · ' + new Date().toLocaleTimeString('ko-KR'));
+  } catch (e) {
+    setConn('err', '동기화 실패');
+    var msg = (e && e.message) ? e.message : String(e);
+    document.getElementById('tableArea').innerHTML =
+      '<div class="empty" style="color:var(--bad);font-weight:600;white-space:pre-wrap;text-align:left;padding:20px"><b>서버 동기화 실패</b><br><br>' +
+      msg.replace(/</g,'&lt;') +
+      '<br><br>DB는 살아있을 가능성이 큽니다(서버 측 검증 완료). 새로고침 후에도 같은 메시지가 뜨면 이 메시지 그대로 캡처해 알려주세요.</div>';
+    console.warn('poll fail', e);
+  }
+}
+
+// 바인딩
+setDrop('drop1', 'f1', 'n1', 1);
+setDrop('drop2', 'f2', 'n2', 2);
+$('run').addEventListener('click', runAnalysis);
+$('exportBtn').addEventListener('click', exportExcel);
+$('backupBtn').addEventListener('click', backup);
+$('restoreBtn').addEventListener('click', function(){ $('restoreFile').click(); });
+$('restoreFile').addEventListener('change', function(e){ if (e.target.files[0]) restore(e.target.files[0]); });
+$('resetBtn').addEventListener('click', resetAll);
+$('dateFilter').addEventListener('change', refresh);
+$('statusFilter').addEventListener('change', refresh);
+$('search').addEventListener('input', refresh);
+document.querySelectorAll('.tab').forEach(function(t){ t.addEventListener('click', function(){ renderTab(t.dataset.tab); }); });
+
+// 초기 로드 + 폴링 시작
+(async function(){
+  setConn('', '연결 중…');
+  await poll();
+  pollTimer = setInterval(poll, 5000);
+})();
+
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+  else if (!pollTimer) { poll(); pollTimer = setInterval(poll, 5000); }
+});
+</script>
+</body>
+</html>
