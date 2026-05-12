@@ -359,6 +359,10 @@ async function loadFile(file) {
 
 function setDrop(dropId, inputId, nameId, slot) {
   const drop = $(dropId), inp = $(inputId), nameEl = $(nameId);
+  // 진단용 로그 — 어떤 이벤트가 영역에 도달하는지 콘솔에 표시
+  ['mouseenter','mouseover','click','dragenter','dragover','drop'].forEach(t =>
+    drop.addEventListener(t, () => console.log(`[drop${slot}] ${t} fired`))
+  );
   // 클릭 → file picker. e.preventDefault 호출하면 user-activation이 끊겨 file picker가 안 열림. 절대 넣지 말 것.
   drop.addEventListener('click', () => { inp.value = ''; inp.click(); });
   drop.addEventListener('dragenter', e => { e.preventDefault(); drop.classList.add('dragover'); });
@@ -723,11 +727,4 @@ $('restoreFile').addEventListener('change', e => { if (e.target.files[0]) restor
 $('resetBtn').addEventListener('click', resetAll);
 $('dateFilter').addEventListener('change', refresh);
 $('statusFilter').addEventListener('change', refresh);
-$('search').addEventListener('input', refresh);
-document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => renderTab(t.dataset.tab)));
-
-// 초기 로드 + 폴링 시작
-(async () => {
-  setConn('', '연결 중…');
-  await poll();
-  pollTimer = setInterval(pol
+$('search').addEventListener('inp
