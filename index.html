@@ -366,11 +366,26 @@ async function handleFile(f, nameEl, slot) {
   try {
     const wb = await loadFile(f);
     if (slot === 1) file1Data = wb; else file2Data = wb;
-    nameEl.textContent = `✓ ${f.name}`;
+    nameEl.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = `✓ ${f.name}`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '✕ 취소';
+    btn.style.cssText = 'margin-left:8px;color:var(--bad);background:none;border:1px solid #fecaca;padding:2px 8px;font-size:11px;cursor:pointer;border-radius:4px;';
+    btn.addEventListener('click', () => clearFile(slot));
+    nameEl.appendChild(span);
+    nameEl.appendChild(btn);
     $('run').disabled = !(file1Data || file2Data);
   } catch (e) {
     nameEl.textContent = `✗ 읽기 실패: ${e.message}`;
   }
+}
+
+function clearFile(slot) {
+  if (slot === 1) { file1Data = null; $('f1').value = ''; $('n1').innerHTML = ''; }
+  else            { file2Data = null; $('f2').value = ''; $('n2').innerHTML = ''; }
+  $('run').disabled = !(file1Data || file2Data);
 }
 
 // ============ Supabase I/O ============
@@ -577,8 +592,10 @@ function renderTab(tab) {
   data.forEach(r => Object.keys(r).forEach(k => { if (k !== '_orderId' && k !== '_상태') allCols.add(k); }));
   const orderedCols = [...priorityCols.filter(c => allCols.has(c)), ...[...allCols].filter(c => !priorityCols.includes(c))];
 
+  // 마스터 체크박스 — 현재 보이는 행 전체 선택 시 일괄 완료/해제
+  const allDone = isOrderTab && data.length > 0 && data.every(r => r._상태 === '완료');
   let html = '<table><thead><tr>';
-  if (isOrderTab) html += '<th class="check-cell">완료</th>';
+  if (isOrderTab) html += `<th class="check-cell"><input type="checkbox" id="masterCheck" title="현재 보이는 행 일괄 완료/해제" ${allDone ? 'checked' : ''}></th>`;
   for (const c of orderedCols) html += `<th>${c}</th>`;
   html += '</tr></thead><tbody>';
 
@@ -627,6 +644,27 @@ function renderTab(tab) {
       await setMemo(id, e.target.value);
     });
   });
+  // 마스터 체크박스 — 현재 보이는(필터·정렬 후) 행 일괄 토글
+  const master = area.querySelector('#masterCheck');
+  if (master) {
+    master.addEventListener('change', async () => {
+      const newStatus = master.checked ? '완료' : '미처리';
+      const ids = data.map(r => r._orderId).filter(Boolean);
+      if (!ids.length) return;
+      if (!confirm(`현재 보이는 ${ids.length}건을 모두 ${newStatus}로 처리할까요?`)) {
+        master.checked = !master.checked;
+        return;
+      }
+      for (const id of ids) {
+        const o = cache.orders.find(x => x.order_id === id);
+        if (o) o.status = newStatus;
+      }
+      refresh();
+      const { error } = await sb.from('review_orders').update({ status: newStatus, updated_at: new Date().toISOString() }).in('order_id', ids);
+      if (error) toast('일괄 저장 실패: ' + error.message, true);
+      else toast(`${ids.length}건 ${newStatus} 처리`);
+    });
+  }
 }
 
 function exportExcel() {
@@ -700,27 +738,4 @@ setDrop('drop2', 'f2', 'n2', 2);
 $('run').addEventListener('click', runAnalysis);
 $('exportBtn').addEventListener('click', exportExcel);
 $('backupBtn').addEventListener('click', backup);
-$('restoreBtn').addEventListener('click', () => $('restoreFile').click());
-$('restoreFile').addEventListener('change', e => { if (e.target.files[0]) restore(e.target.files[0]); });
-$('resetBtn').addEventListener('click', resetAll);
-$('dateFilter').addEventListener('change', refresh);
-$('statusFilter').addEventListener('change', refresh);
-$('search').addEventListener('input', refresh);
-document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => renderTab(t.dataset.tab)));
-
-// 초기 로드 + 폴링 시작
-(async () => {
-  setConn('', '연결 중…');
-  await poll();
-  pollTimer = setInterval(poll, 5000);
-})();
-
-// 페이지 비활성화 시 폴링 일시정지
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-  else if (!pollTimer) { poll(); pollTimer = setInterval(poll, 5000); }
-});
-</script>
-</body>
-</html>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+$('restoreBtn').add
