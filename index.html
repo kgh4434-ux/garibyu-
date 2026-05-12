@@ -145,16 +145,16 @@
   <div class="grid">
     <div class="card">
       <h3>① 리뷰리포트 (.xlsx) — 가리뷰 참여자</h3>
+      <input type="file" id="f1" accept=".xlsx,.xls" hidden />
       <label class="drop" id="drop1" for="f1">
-        <input type="file" id="f1" accept=".xlsx,.xls" hidden />
         <div class="placeholder">클릭 또는 드래그</div>
         <div class="filename" id="n1"></div>
       </label>
     </div>
     <div class="card">
       <h3>② 주문 파일 (.xls/.xlsx) — 자동 형식 인식, 0000 자동 해제</h3>
+      <input type="file" id="f2" accept=".xlsx,.xls" hidden />
       <label class="drop" id="drop2" for="f2">
-        <input type="file" id="f2" accept=".xlsx,.xls" hidden />
         <div class="placeholder">클릭 또는 드래그</div>
         <div class="filename" id="n2"></div>
       </label>
@@ -734,4 +734,4 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   pollTimer = setInterval(poll, 5000);
 })();
 
-// 페이지 비활성화 시
+// 페이지 비활성화 시 폴
