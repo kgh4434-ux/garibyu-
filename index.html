@@ -359,8 +359,8 @@ async function loadFile(file) {
 
 function setDrop(dropId, inputId, nameId, slot) {
   const drop = $(dropId), inp = $(inputId), nameEl = $(nameId);
-  // 클릭 → file picker (input이 pointer-events:none이라 div 클릭만 처리됨)
-  drop.addEventListener('click', e => { e.preventDefault(); inp.value = ''; inp.click(); });
+  // 클릭 → file picker. e.preventDefault 호출하면 user-activation이 끊겨 file picker가 안 열림. 절대 넣지 말 것.
+  drop.addEventListener('click', () => { inp.value = ''; inp.click(); });
   drop.addEventListener('dragenter', e => { e.preventDefault(); drop.classList.add('dragover'); });
   drop.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; drop.classList.add('dragover'); });
   drop.addEventListener('dragleave', e => { if (e.target === drop) drop.classList.remove('dragover'); });
@@ -730,7 +730,4 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
 (async () => {
   setConn('', '연결 중…');
   await poll();
-  pollTimer = setInterval(poll, 5000);
-})();
-
-// 페이�
+  pollTimer = setInterval(pol
