@@ -32,7 +32,7 @@
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
   .drop { border:2px dashed var(--line); border-radius:8px; padding:20px; text-align:center; cursor:pointer; transition:.15s; }
   .drop:hover, .drop.dragover { border-color:var(--acc); background:#eff6ff; }
-  .drop input { display:none; }
+  .drop input { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; opacity:0; pointer-events:none; }
   .drop .filename { color:var(--acc); font-size:12px; margin-top:6px; word-break:break-all; }
   .drop .placeholder { color:var(--muted); font-size:13px; }
   .card h3 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
@@ -359,9 +359,8 @@ async function loadFile(file) {
 
 function setDrop(dropId, inputId, nameId, slot) {
   const drop = $(dropId), inp = $(inputId), nameEl = $(nameId);
-  // div 클릭 시 file picker 열기 (input 이벤트 버블 방지)
-  drop.addEventListener('click', e => { if (e.target !== inp) inp.click(); });
-  // dragenter/dragover 모두 preventDefault — 일부 브라우저는 dragenter 처리 안 하면 drop 미발생
+  // 클릭 → file picker (input이 pointer-events:none이라 div 클릭만 처리됨)
+  drop.addEventListener('click', e => { e.preventDefault(); inp.value = ''; inp.click(); });
   drop.addEventListener('dragenter', e => { e.preventDefault(); drop.classList.add('dragover'); });
   drop.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; drop.classList.add('dragover'); });
   drop.addEventListener('dragleave', e => { if (e.target === drop) drop.classList.remove('dragover'); });
@@ -374,6 +373,7 @@ function setDrop(dropId, inputId, nameId, slot) {
   inp.addEventListener('change', async () => {
     const f = inp.files[0]; if (!f) return;
     await handleFile(f, nameEl, slot);
+    inp.value = ''; // 같은 파일 재선택 시 change 이벤트 보장
   });
 }
 async function handleFile(f, nameEl, slot) {
@@ -733,6 +733,4 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   pollTimer = setInterval(poll, 5000);
 })();
 
-// 페이지 비활성화 시 폴링 일시정지
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { if 
+// 페이�
