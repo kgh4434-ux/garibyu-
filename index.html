@@ -30,13 +30,9 @@
   details.guide .body .danger { background:#fee2e2; border-left:3px solid var(--bad); padding:8px 12px; border-radius:4px; margin:8px 0; }
 
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
-  .drop { display:block; border:2px dashed var(--line); border-radius:8px; padding:20px; text-align:center; cursor:pointer; transition:.15s; }
-  .drop:hover, .drop.dragover { border-color:var(--acc); background:#eff6ff; }
-  .drop input[type=file] { display:none; }
-  /* 자식 div만 차단 — input은 영향 안 받게 */
-  .drop > div { pointer-events:none; user-select:none; }
-  .drop .filename { color:var(--acc); font-size:12px; margin-top:6px; word-break:break-all; }
-  .drop .placeholder { color:var(--muted); font-size:13px; }
+  .upload { padding:14px; border:2px dashed var(--line); border-radius:8px; }
+  .upload input[type=file] { display:block; width:100%; padding:10px; border:1px solid var(--line); border-radius:6px; background:#fff; font-size:13px; cursor:pointer; }
+  .upload .filename { color:var(--acc); font-size:12px; margin-top:8px; word-break:break-all; }
   .card h3 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
 
   .controls { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; padding:12px 14px; background:var(--panel); border:1px solid var(--line); border-radius:10px; }
@@ -145,19 +141,17 @@
   <div class="grid">
     <div class="card">
       <h3>① 리뷰리포트 (.xlsx) — 가리뷰 참여자</h3>
-      <label class="drop" id="drop1">
-        <input type="file" id="f1" accept=".xlsx,.xls" style="display:none" />
-        <div class="placeholder">클릭 또는 드래그</div>
+      <div class="upload">
+        <input type="file" id="f1" accept=".xlsx,.xls" />
         <div class="filename" id="n1"></div>
-      </label>
+      </div>
     </div>
     <div class="card">
       <h3>② 주문 파일 (.xls/.xlsx) — 자동 형식 인식, 0000 자동 해제</h3>
-      <label class="drop" id="drop2">
-        <input type="file" id="f2" accept=".xlsx,.xls" style="display:none" />
-        <div class="placeholder">클릭 또는 드래그</div>
+      <div class="upload">
+        <input type="file" id="f2" accept=".xlsx,.xls" />
         <div class="filename" id="n2"></div>
-      </label>
+      </div>
     </div>
   </div>
 
@@ -359,23 +353,12 @@ async function loadFile(file) {
   }
 }
 
-// label[for=fN]이 input click을 자동 트리거. dragover/drop만 직접 처리.
-function setDrop(dropId, inputId, nameId, slot) {
-  const drop = $(dropId), inp = $(inputId), nameEl = $(nameId);
-  drop.addEventListener('dragenter', e => { e.preventDefault(); drop.classList.add('dragover'); });
-  drop.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; drop.classList.add('dragover'); });
-  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
-  drop.addEventListener('drop', async e => {
-    e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover');
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (!f) return;
-    await handleFile(f, nameEl, slot);
-  });
+// 표준 input[type=file] change만 사용 — 트릭 없음
+function setDrop(_dropId, inputId, nameId, slot) {
+  const inp = $(inputId), nameEl = $(nameId);
   inp.addEventListener('change', async () => {
-    alert(`[drop${slot}] change fired, files=${inp.files.length}`); // 임시 디버그
     const f = inp.files[0]; if (!f) return;
     await handleFile(f, nameEl, slot);
-    inp.value = '';
   });
 }
 async function handleFile(f, nameEl, slot) {
@@ -711,9 +694,6 @@ async function poll() {
   }
 }
 
-// 페이지 다른 영역에 파일 떨어뜨릴 때 브라우저 기본동작(파일 열기/저장 다이얼로그) 차단 — capture로 가장 먼저
-['dragover','drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); }, true));
-
 // 바인딩
 setDrop('drop1', 'f1', 'n1', 1);
 setDrop('drop2', 'f2', 'n2', 2);
@@ -732,4 +712,15 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
 (async () => {
   setConn('', '연결 중…');
   await poll();
-  pollTimer = setInterval(poll, 
+  pollTimer = setInterval(poll, 5000);
+})();
+
+// 페이지 비활성화 시 폴링 일시정지
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+  else if (!pollTimer) { poll(); pollTimer = setInterval(poll, 5000); }
+});
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
