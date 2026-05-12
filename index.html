@@ -30,7 +30,7 @@
   details.guide .body .danger { background:#fee2e2; border-left:3px solid var(--bad); padding:8px 12px; border-radius:4px; margin:8px 0; }
 
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
-  .drop { border:2px dashed var(--line); border-radius:8px; padding:20px; text-align:center; cursor:pointer; transition:.15s; }
+  .drop { display:block; border:2px dashed var(--line); border-radius:8px; padding:20px; text-align:center; cursor:pointer; transition:.15s; }
   .drop:hover, .drop.dragover { border-color:var(--acc); background:#eff6ff; }
   .drop input[type=file] { display:none; }
   /* 자식 요소가 click/drop 이벤트를 가로채지 못하게 — 모든 마우스 이벤트가 .drop(label)으로 직행 */
@@ -734,4 +734,4 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   pollTimer = setInterval(poll, 5000);
 })();
 
-// 페이지 비활성화 시 폴
+// 페이지 비�
