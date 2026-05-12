@@ -346,9 +346,10 @@ async function loadFile(file) {
     return XLSX.read(buf, { type: 'array', cellDates: false });
   } catch (e) {
     if (typeof XlsxPopulate === 'undefined') throw e;
+    // xlsx-populate에 File 객체 직접 전달, 출력은 uint8array로 명시 (브라우저 default가 Blob이라 SheetJS가 못 읽음)
     try {
-      const wb = await XlsxPopulate.fromDataAsync(buf, { password: '0000' });
-      const decrypted = await wb.outputAsync();
+      const wb = await XlsxPopulate.fromDataAsync(file, { password: '0000' });
+      const decrypted = await wb.outputAsync({ type: 'uint8array' });
       return XLSX.read(decrypted, { type: 'array', cellDates: false });
     } catch (e2) {
       throw new Error('파일 읽기 실패. 암호 해제도 실패(0000 시도): ' + (e2.message || e2));
@@ -734,9 +735,4 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
 
 // 페이지 비활성화 시 폴링 일시정지
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-  else if (!pollTimer) { poll(); pollTimer = setInterval(poll, 5000); }
-});
-</script>
-</body>
-</html>
+  if (document.hidden) { if 
