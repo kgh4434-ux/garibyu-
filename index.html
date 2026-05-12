@@ -214,7 +214,14 @@
 // ============================================================
 const SUPA_URL = "https://fpzztnkicdjrwnbvwzwc.supabase.co";
 const SUPA_KEY = "sb_publishable_z5wRhXdj9M-flxdrAD5GOw_FrILYTM0";
-const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+let sb;
+try {
+  if (!window.supabase) throw new Error('supabase-js CDN 로드 실패 (네트워크 차단 가능성)');
+  sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+} catch (e) {
+  document.body.innerHTML = `<div style="padding:40px;color:#dc2626;font-family:sans-serif"><h2>초기화 실패</h2><p>${e.message}</p><p>jsdelivr.net / cdnjs.cloudflare.com 차단 여부 확인 필요</p></div>`;
+  throw e;
+}
 
 const $ = id => document.getElementById(id);
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -725,17 +732,4 @@ async function poll() {
   try {
     await fetchAll();
     refresh();
-    setConn('ok', `동기화 OK · ${new Date().toLocaleTimeString('ko-KR')}`);
-  } catch (e) {
-    setConn('err', '동기화 실패');
-    console.warn('poll fail', e);
-  }
-}
-
-// 바인딩
-setDrop('drop1', 'f1', 'n1', 1);
-setDrop('drop2', 'f2', 'n2', 2);
-$('run').addEventListener('click', runAnalysis);
-$('exportBtn').addEventListener('click', exportExcel);
-$('backupBtn').addEventListener('click', backup);
-$('restoreBtn').add
+    setConn('ok', `동기화 OK · ${new Date().toLocaleTimeString('ko-
