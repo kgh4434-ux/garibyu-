@@ -159,6 +159,7 @@
 
   <div class="controls">
     <button class="primary" id="run" disabled>누적 분석</button>
+    <button id="reEvalBtn" title="파일 업로드 없이 현재 매칭키로 누적 데이터 재평가">재평가</button>
     <span class="ctrl-label">매칭키:</span>
     <select id="matchKey">
       <option value="orsafe">이름+전화 OR 이름+우편 (안전 OR, 권장)</option>
@@ -819,4 +820,88 @@ async function poll() {
     setConn('err', '동기화 실패');
     var msg = (e && e.message) ? e.message : String(e);
     document.getElementById('tableArea').innerHTML =
-      '<div class="empty" style="
+      '<div class="empty" style="color:var(--bad);font-weight:600;white-space:pre-wrap;text-align:left;padding:20px"><b>서버 동기화 실패</b><br><br>' +
+      msg.replace(/</g,'&lt;') +
+      '<br><br>DB는 살아있을 가능성이 큽니다(서버 측 검증 완료). 새로고침 후에도 같은 메시지가 뜨면 이 메시지 그대로 캡처해 알려주세요.</div>';
+    console.warn('poll fail', e);
+  }
+}
+
+// 파일 업로드 없이 누적 데이터만 새 매칭키로 재평가 — 사용자가 매칭키 변경 후 누르는 버튼
+async function reevaluate() {
+  const mode = $('matchKey').value;
+  localStorage.setItem('reviewDash.matchKey', mode);
+  try {
+    await fetchAll();
+    const reviewerKeyMap = new Map();
+    for (const r of cache.reviewers) {
+      const keys = buildMatchKeyList(r.data, 'reviewer', mode);
+      for (const k of keys) {
+        if (!reviewerKeyMap.has(k)) reviewerKeyMap.set(k, r.data);
+      }
+    }
+    const updates = [];
+    for (const o of cache.orders) {
+      const orderKeys = buildMatchKeyList(o.data, 'order', mode);
+      let md = null, matchedKey = '';
+      for (const k of orderKeys) {
+        if (reviewerKeyMap.has(k)) { md = reviewerKeyMap.get(k); matchedKey = k; break; }
+      }
+      const newCat = md ? '가리뷰' : '실주문';
+      const need =
+        o.category !== newCat ||
+        (o.match_key || null) !== (matchedKey || null) ||
+        (o.participant_id || null) !== ((md && md['참여ID']) || null) ||
+        (o.review_sheet || null) !== ((md && md['시트']) || null);
+      if (need) {
+        updates.push({
+          order_id: o.order_id, data: o.data, category: newCat,
+          match_key: matchedKey || null,
+          participant_id: (md && md['참여ID']) || null,
+          review_sheet: (md && md['시트']) || null,
+          origin_name: (md && md['수취인']) || null,
+          origin_phone: (md && md['연락처']) || null,
+          collected_date: o.collected_date, status: o.status, memo: o.memo,
+        });
+      }
+    }
+    if (updates.length) {
+      const { error } = await sb.from('review_orders').upsert(updates, { onConflict: 'order_id' });
+      if (error) throw error;
+    }
+    await fetchAll(); refresh();
+    $('status').textContent = `재평가 완료 (매칭키: ${mode}) · 갱신 ${updates.length}건`;
+    toast(`재평가 완료 — ${updates.length}건 갱신`);
+  } catch (e) {
+    toast('재평가 실패: ' + (e.message || e), true);
+  }
+}
+
+// 바인딩
+setDrop('drop1', 'f1', 'n1', 1);
+setDrop('drop2', 'f2', 'n2', 2);
+$('run').addEventListener('click', runAnalysis);
+var reEvalBtn = $('reEvalBtn'); if (reEvalBtn) reEvalBtn.addEventListener('click', reevaluate);
+$('exportBtn').addEventListener('click', exportExcel);
+$('backupBtn').addEventListener('click', backup);
+$('restoreBtn').addEventListener('click', function(){ $('restoreFile').click(); });
+$('restoreFile').addEventListener('change', function(e){ if (e.target.files[0]) restore(e.target.files[0]); });
+$('resetBtn').addEventListener('click', resetAll);
+$('dateFilter').addEventListener('change', refresh);
+$('statusFilter').addEventListener('change', refresh);
+$('search').addEventListener('input', refresh);
+document.querySelectorAll('.tab').forEach(function(t){ t.addEventListener('click', function(){ renderTab(t.dataset.tab); }); });
+
+(async function(){
+  setConn('', '연결 중…');
+  await poll();
+  pollTimer = setInterval(poll, 5000);
+})();
+
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+  else if (!pollTimer) { poll(); pollTimer = setInterval(poll, 5000); }
+});
+</script>
+</body>
+</html>
