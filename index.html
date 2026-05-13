@@ -161,7 +161,8 @@
     <button class="primary" id="run" disabled>누적 분석</button>
     <span class="ctrl-label">매칭키:</span>
     <select id="matchKey">
-      <option value="tail4">전화 끝 4자리 (권장)</option>
+      <option value="orsafe">이름+전화 OR 이름+우편 (안전 OR, 권장)</option>
+      <option value="tail4">전화 끝 4자리</option>
       <option value="tail4name">전화 끝4 + 이름2자</option>
       <option value="zipname">우편번호 + 이름2자</option>
     </select>
@@ -264,7 +265,34 @@ function buildMatchKey(row, type, mode) {
   if (mode === 'tail4') return t || null;
   if (mode === 'tail4name') return t && n ? `${t}|${n}` : null;
   if (mode === 'zipname') return z && n ? `${z}|${n}` : null;
+  if (mode === 'orsafe') {
+    // 등록·식별용 대표 키 (이름+전화 우선, 없으면 이름+우편)
+    if (n && t) return `PT|${n}|${t}`;
+    if (n && z) return `ZN|${n}|${z}`;
+    return null;
+  }
   return null;
+}
+
+// 매칭 후보 키 리스트 (OR 매칭 지원). 단일 키 모드는 [key] 1개 반환.
+function buildMatchKeyList(row, type, mode) {
+  if (mode !== 'orsafe') {
+    const k = buildMatchKey(row, type, mode);
+    return k ? [k] : [];
+  }
+  const phoneField = type === 'reviewer' ? row['연락처'] : (row.__phone ?? row['수령자휴대폰'] ?? row['수취인연락처1']);
+  const nameField  = type === 'reviewer' ? row['수취인'] : (row.__name  ?? row['수령자이름']   ?? row['수취인명']);
+  const zipField   = type === 'reviewer'
+    ? (String(row['배송지'] ?? '').match(/\((\d{5})\)/) || [])[1]
+    : (row.__zip ?? row['수령자우편번호'] ?? row['우편번호']);
+  const n = name2(nameField);
+  if (!n) return [];
+  const t = tail4(phoneField);
+  const z = String(zipField ?? '').trim();
+  const keys = [];
+  if (t) keys.push(`PT|${n}|${t}`);
+  if (z) keys.push(`ZN|${n}|${z}`);
+  return keys;
 }
 
 function parseReviewFile(wb) {
@@ -453,19 +481,26 @@ async function runAnalysis() {
       }
     }
 
-    // 누적 모든 주문 재평가
+    // 누적 모든 주문 재평가 — 리뷰자 데이터로 매번 키 리스트 재생성 (OR 매칭 지원)
     await fetchAll();
-    const reviewerMap = new Map();
-    for (const r of cache.reviewers) reviewerMap.set(r.match_key, r);
+    const reviewerKeyMap = new Map(); // key → reviewer.data
+    for (const r of cache.reviewers) {
+      const keys = buildMatchKeyList(r.data, 'reviewer', mode);
+      for (const k of keys) {
+        if (!reviewerKeyMap.has(k)) reviewerKeyMap.set(k, r.data);
+      }
+    }
     const updates = [];
     for (const o of cache.orders) {
-      const k = buildMatchKey(o.data, 'order', mode);
-      const matched = k ? reviewerMap.get(k) : null;
-      const newCat = matched ? '가리뷰' : '실주문';
-      const md = matched ? matched.data : null;
+      const orderKeys = buildMatchKeyList(o.data, 'order', mode);
+      let md = null, matchedKey = '';
+      for (const k of orderKeys) {
+        if (reviewerKeyMap.has(k)) { md = reviewerKeyMap.get(k); matchedKey = k; break; }
+      }
+      const newCat = md ? '가리뷰' : '실주문';
       const need =
         o.category !== newCat ||
-        (o.match_key || null) !== (k || null) ||
+        (o.match_key || null) !== (matchedKey || null) ||
         (o.participant_id || null) !== ((md && md['참여ID']) || null) ||
         (o.review_sheet || null) !== ((md && md['시트']) || null);
       if (need) {
@@ -473,7 +508,7 @@ async function runAnalysis() {
           order_id: o.order_id,
           data: o.data,
           category: newCat,
-          match_key: k || null,
+          match_key: matchedKey || null,
           participant_id: (md && md['참여ID']) || null,
           review_sheet: (md && md['시트']) || null,
           origin_name: (md && md['수취인']) || null,
@@ -784,38 +819,4 @@ async function poll() {
     setConn('err', '동기화 실패');
     var msg = (e && e.message) ? e.message : String(e);
     document.getElementById('tableArea').innerHTML =
-      '<div class="empty" style="color:var(--bad);font-weight:600;white-space:pre-wrap;text-align:left;padding:20px"><b>서버 동기화 실패</b><br><br>' +
-      msg.replace(/</g,'&lt;') +
-      '<br><br>DB는 살아있을 가능성이 큽니다(서버 측 검증 완료). 새로고침 후에도 같은 메시지가 뜨면 이 메시지 그대로 캡처해 알려주세요.</div>';
-    console.warn('poll fail', e);
-  }
-}
-
-// 바인딩
-setDrop('drop1', 'f1', 'n1', 1);
-setDrop('drop2', 'f2', 'n2', 2);
-$('run').addEventListener('click', runAnalysis);
-$('exportBtn').addEventListener('click', exportExcel);
-$('backupBtn').addEventListener('click', backup);
-$('restoreBtn').addEventListener('click', function(){ $('restoreFile').click(); });
-$('restoreFile').addEventListener('change', function(e){ if (e.target.files[0]) restore(e.target.files[0]); });
-$('resetBtn').addEventListener('click', resetAll);
-$('dateFilter').addEventListener('change', refresh);
-$('statusFilter').addEventListener('change', refresh);
-$('search').addEventListener('input', refresh);
-document.querySelectorAll('.tab').forEach(function(t){ t.addEventListener('click', function(){ renderTab(t.dataset.tab); }); });
-
-// 초기 로드 + 폴링 시작
-(async function(){
-  setConn('', '연결 중…');
-  await poll();
-  pollTimer = setInterval(poll, 5000);
-})();
-
-document.addEventListener('visibilitychange', function(){
-  if (document.hidden) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-  else if (!pollTimer) { poll(); pollTimer = setInterval(poll, 5000); }
-});
-</script>
-</body>
-</html>
+      '<div class="empty" style="
