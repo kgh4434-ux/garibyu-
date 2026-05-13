@@ -66,6 +66,8 @@
   .pill.real { background:#dcfce7; color:var(--ok); }
   .pill.fake { background:#fee2e2; color:var(--bad); }
   .badge-new { display:inline-block; background:var(--new); color:#fff; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700; margin-left:4px; }
+  .badge-warn { display:inline-block; background:var(--warn); color:#fff; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700; margin-left:4px; }
+  .badge-zip  { display:inline-block; background:#9333ea; color:#fff; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700; margin-left:4px; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
   .toast { position:fixed; bottom:20px; right:20px; background:#0f172a; color:#fff; padding:12px 18px; border-radius:8px; opacity:0; transform:translateY(20px); transition:.2s; pointer-events:none; font-size:13px; z-index:10; max-width:360px; }
   .toast.show { opacity:1; transform:translateY(0); }
@@ -509,13 +511,48 @@ async function setMemo(id, memo) {
 }
 
 // ============ UI ============
-function dbToUi(row) {
+// 누적 주문 전수 의심 빈도 계산
+function computeSuspectFreq() {
+  const personFreq = new Map();   // (이름2자|전화끝4) → 동일인 추정 등장 횟수
+  const zipNames = new Map();     // 우편번호 → Set<이름2자>
+  for (const o of cache.orders) {
+    const d = o.data || {};
+    const n2 = name2(d.__name || d['수령자이름'] || d['수취인명'] || '');
+    const t4 = tail4(d.__phone || d['수령자휴대폰'] || d['수취인연락처1'] || '');
+    const z = String(d.__zip || d['수령자우편번호'] || d['우편번호'] || '').trim();
+    if (n2 && t4) {
+      const k = n2 + '|' + t4;
+      personFreq.set(k, (personFreq.get(k) || 0) + 1);
+    }
+    if (z && n2) {
+      if (!zipNames.has(z)) zipNames.set(z, new Set());
+      zipNames.get(z).add(n2);
+    }
+  }
+  return { personFreq, zipNames };
+}
+
+function dbToUi(row, freq) {
+  const d = row.data || {};
+  const n2 = name2(d.__name || d['수령자이름'] || d['수취인명'] || '');
+  const t4 = tail4(d.__phone || d['수령자휴대폰'] || d['수취인연락처1'] || '');
+  const z  = String(d.__zip || d['수령자우편번호'] || d['우편번호'] || '').trim();
+  let suspect = '';
+  if (freq && n2 && t4) {
+    const cnt = freq.personFreq.get(n2 + '|' + t4) || 0;
+    if (cnt > 1) suspect += `동일인${cnt}회 `;
+  }
+  if (freq && z) {
+    const names = freq.zipNames.get(z);
+    if (names && names.size > 1) suspect += `동일주소${names.size}명 `;
+  }
   return {
     ...row.data,
     _수집일자: row.collected_date,
     _상태: row.status,
     _메모: row.memo || '',
     _구분: row.category,
+    _의심: suspect.trim(),
     _매칭키: row.match_key || '',
     _참여ID: row.participant_id || '',
     _리뷰시트: row.review_sheet || '',
@@ -569,9 +606,10 @@ function refresh() {
 function renderTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  const freq = computeSuspectFreq();
   let data;
-  if (tab === 'real') data = cache.orders.filter(o => o.category === '실주문').map(dbToUi);
-  else if (tab === 'fake') data = cache.orders.filter(o => o.category === '가리뷰').map(dbToUi);
+  if (tab === 'real') data = cache.orders.filter(o => o.category === '실주문').map(o => dbToUi(o, freq));
+  else if (tab === 'fake') data = cache.orders.filter(o => o.category === '가리뷰').map(o => dbToUi(o, freq));
   else data = cache.reviewers.map(dbReviewerToUi);
 
   if (tab !== 'reviewers') data = applyFilters(data);
@@ -587,7 +625,7 @@ function renderTab(tab) {
   const isOrderTab = tab !== 'reviewers';
 
   const priorityCols = isOrderTab
-    ? ['_수집일자', '_메모', '_구분',
+    ? ['_수집일자', '_메모', '_구분', '_의심',
        '주문번호', '상품주문번호', '관리번호',
        '수령자이름', '수취인명',
        '수령자휴대폰', '수취인연락처1',
@@ -620,6 +658,13 @@ function renderTab(tab) {
       if (c === '_구분') {
         cell = `<span class="pill ${v === '실주문' ? 'real' : 'fake'}">${v}</span>`;
         if (isNew) cell += `<span class="badge-new">NEW</span>`;
+      } else if (c === '_의심' && isOrderTab) {
+        let parts = '';
+        if (v) {
+          if (v.includes('동일인')) parts += `<span class="badge-warn">${v.match(/동일인\d+회/) || ''}</span>`;
+          if (v.includes('동일주소')) parts += `<span class="badge-zip">${v.match(/동일주소\d+명/) || ''}</span>`;
+        }
+        cell = parts;
       } else if (c === '_수집일자' && isNew) {
         cell = `${cell}<span class="badge-new">오늘</span>`;
       } else if (c === '_메모' && isOrderTab) {
@@ -675,8 +720,9 @@ function renderTab(tab) {
 }
 
 function exportExcel() {
-  const real = cache.orders.filter(o => o.category === '실주문').map(dbToUi);
-  const fake = cache.orders.filter(o => o.category === '가리뷰').map(dbToUi);
+  const freq = computeSuspectFreq();
+  const real = cache.orders.filter(o => o.category === '실주문').map(o => dbToUi(o, freq));
+  const fake = cache.orders.filter(o => o.category === '가리뷰').map(o => dbToUi(o, freq));
   const reviewers = cache.reviewers.map(dbReviewerToUi);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(real), '실주문');
