@@ -160,6 +160,7 @@
   <div class="controls">
     <button class="primary" id="run" disabled>누적 분석</button>
     <button id="reEvalBtn" title="파일 업로드 없이 현재 매칭키로 누적 데이터 재평가">재평가</button>
+    <button id="bulkDoneBtn" title="현재 표에서 체크한 행들 일괄 완료">선택 완료</button>
     <span class="ctrl-label">매칭키:</span>
     <select id="matchKey">
       <option value="orsafe">이름+전화 OR 이름+우편 (안전 OR, 권장)</option>
@@ -827,6 +828,23 @@ async function poll() {
   }
 }
 
+// 표에서 체크된 행들만 일괄 완료 처리 (마스터 체크박스/필터와 별개)
+async function bulkComplete() {
+  const checked = document.querySelectorAll('#tableArea input[data-action="toggle"]:checked');
+  const ids = [];
+  checked.forEach(function(el){ if (el.dataset.id) ids.push(el.dataset.id); });
+  if (!ids.length) { toast('체크된 행 없음 — 먼저 행 좌측 체크박스로 선택'); return; }
+  if (!confirm('선택한 ' + ids.length + '건을 모두 완료로 처리할까요?')) return;
+  for (const id of ids) {
+    const o = cache.orders.find(function(x){ return x.order_id === id; });
+    if (o) o.status = '완료';
+  }
+  refresh();
+  const { error } = await sb.from('review_orders').update({ status: '완료', updated_at: new Date().toISOString() }).in('order_id', ids);
+  if (error) toast('일괄 저장 실패: ' + error.message, true);
+  else toast(ids.length + '건 완료 처리');
+}
+
 // 파일 업로드 없이 누적 데이터만 새 매칭키로 재평가 — 사용자가 매칭키 변경 후 누르는 버튼
 async function reevaluate() {
   const mode = $('matchKey').value;
@@ -882,6 +900,7 @@ setDrop('drop1', 'f1', 'n1', 1);
 setDrop('drop2', 'f2', 'n2', 2);
 $('run').addEventListener('click', runAnalysis);
 var reEvalBtn = $('reEvalBtn'); if (reEvalBtn) reEvalBtn.addEventListener('click', reevaluate);
+var bulkDoneBtn = $('bulkDoneBtn'); if (bulkDoneBtn) bulkDoneBtn.addEventListener('click', bulkComplete);
 $('exportBtn').addEventListener('click', exportExcel);
 $('backupBtn').addEventListener('click', backup);
 $('restoreBtn').addEventListener('click', function(){ $('restoreFile').click(); });
