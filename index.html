@@ -234,6 +234,10 @@
         <input type="file" id="cf1" accept=".xlsx,.xls" />
         <div class="filename" id="cn1"></div>
       </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" id="filterGaribyu" checked style="width:14px;height:14px;">
+        리뷰 명단과 매칭해 가리뷰 제외 (네이버만)
+      </label>
     </div>
     <div class="card">
       <h3>② 쿠팡 DeliveryList (.xlsx)</h3>
@@ -1081,9 +1085,29 @@ async function dispatchOrders() {
   status.textContent = '파싱 중…';
   try {
     var allRows = [];
+    var excludedGaribyu = [];
     if (collect_smart_wb) {
       var sm = parseOrderFile(collect_smart_wb);
-      sm.forEach(function(d){ d._source = 'smartstore'; d._source_label = '스마트스토어'; allRows.push(d); });
+      var doFilter = document.getElementById('filterGaribyu').checked;
+      if (doFilter) {
+        // 누적된 리뷰자 명단 + 현재 매칭키로 가리뷰 행 거르기
+        var matchMode = $('matchKey') ? $('matchKey').value : 'orsafe';
+        var revKeySet = new Set();
+        for (var ri=0; ri<cache.reviewers.length; ri++) {
+          var keys = buildMatchKeyList(cache.reviewers[ri].data, 'reviewer', matchMode);
+          for (var ki=0; ki<keys.length; ki++) revKeySet.add(keys[ki]);
+        }
+        sm.forEach(function(d){
+          d._source = 'smartstore'; d._source_label = '스마트스토어';
+          var oKeys = buildMatchKeyList(d, 'order', matchMode);
+          var matched = false;
+          for (var oi=0; oi<oKeys.length; oi++) { if (revKeySet.has(oKeys[oi])) { matched = true; break; } }
+          if (matched) excludedGaribyu.push(d);
+          else allRows.push(d);
+        });
+      } else {
+        sm.forEach(function(d){ d._source = 'smartstore'; d._source_label = '스마트스토어'; allRows.push(d); });
+      }
     }
     if (collect_coupang_wb) {
       var cp = parseOrderFile(collect_coupang_wb);
@@ -1095,6 +1119,7 @@ async function dispatchOrders() {
     for (var i=0; i<VENDOR_RULES.length; i++) groups[VENDOR_RULES[i].id] = { name: VENDOR_RULES[i].name, rows: [] };
     groups['internal'] = { name: '내부 체크 (옥천수라상+재니유)', rows: [] };
     groups['unmapped'] = { name: '미매핑 상품', rows: [] };
+    groups['_garibyu_excluded'] = { name: '가리뷰 제외 (네이버)', rows: excludedGaribyu };
 
     var dbRows = [];
     for (var k=0; k<allRows.length; k++) {
@@ -1166,6 +1191,15 @@ function renderDispatchResult() {
     + ' style="width:100%;background:var(--bad);color:#fff;border:none;padding:8px;border-radius:6px;cursor:pointer;font-weight:600;'
     + (ug.rows.length===0?'opacity:.4;cursor:not-allowed':'') + '">엑셀 다운로드</button>'
     + '</div>';
+  var gx = groups['_garibyu_excluded'];
+  if (gx.rows.length) {
+    html += '<div style="background:#f1f5f9;border:1px dashed var(--muted);border-radius:10px;padding:14px;">'
+      + '<div style="font-size:11px;color:var(--muted);font-weight:700;">가리뷰 제외 (네이버)</div>'
+      + '<div style="font-size:26px;font-weight:700;color:var(--muted);margin:4px 0;">' + gx.rows.length + '건</div>'
+      + '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">발주 대상에서 제외됨</div>'
+      + '<div style="font-size:11px;color:var(--muted);">— 다운로드 없음 —</div>'
+      + '</div>';
+  }
   html += '</div>';
 
   if (ug.rows.length) {
