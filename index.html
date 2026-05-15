@@ -163,9 +163,9 @@
       </div>
     </div>
     <div class="card">
-      <h3>② 주문 파일 (.xls/.xlsx) — 자동 형식 인식, 0000 자동 해제</h3>
+      <h3>② 주문 파일 (.xls/.xlsx) — 네이버·쿠팡 동시 업로드 가능, 0000 자동 해제</h3>
       <div class="upload">
-        <input type="file" id="f2" accept=".xlsx,.xls" />
+        <input type="file" id="f2" accept=".xlsx,.xls" multiple />
         <div class="filename" id="n2"></div>
       </div>
     </div>
@@ -349,13 +349,13 @@ function parseReviewFile(wb) {
 
 // 다양한 형식의 주문 파일을 자동 인식해 표준 키(__order_id, __name, __phone, __addr, __zip)로 정규화
 const ORDER_ALIAS = {
-  order_id: ['상품주문번호', '주문번호', '관리번호'],  // 라인 단위 고유 ID 우선 (같은 결제 다상품 보존)
-  name:     ['수령자이름', '수취인명', '수취인'],
-  phone:    ['수령자휴대폰', '수취인연락처1', '수취인연락처', '수령자전화', '연락처'],
-  addr:     ['수령자주소', '통합배송지', '기본배송지', '배송지'],
+  order_id: ['상품주문번호', '주문번호', '관리번호'],
+  name:     ['수령자이름', '수취인명', '수취인', '수취인이름'],
+  phone:    ['수령자휴대폰', '수취인연락처1', '수취인연락처', '수령자전화', '연락처', '수취인전화번호'],
+  addr:     ['수령자주소', '통합배송지', '기본배송지', '배송지', '수취인 주소'],
   zip:      ['수령자우편번호', '우편번호'],
-  product:  ['상품명'],
-  invoice:  ['송장번호'],
+  product:  ['상품명', '등록상품명', '노출상품명(옵션명)'],
+  invoice:  ['송장번호', '운송장번호'],
 };
 function pick(obj, keys) {
   for (const k of keys) {
@@ -426,15 +426,23 @@ async function loadFile(file) {
 function setDrop(_dropId, inputId, nameId, slot) {
   const inp = $(inputId), nameEl = $(nameId);
   inp.addEventListener('change', async () => {
-    const f = inp.files[0]; if (!f) return;
-    await handleFile(f, nameEl, slot);
+    const files = Array.from(inp.files || []);
+    if (!files.length) return;
+    for (const f of files) {
+      await handleFile(f, nameEl, slot);
+    }
   });
 }
 async function handleFile(f, nameEl, slot) {
   nameEl.textContent = `로드 중: ${f.name}`;
   try {
     const wb = await loadFile(f);
-    if (slot === 1) file1Data = wb; else file2Data = wb;
+    if (slot === 1) {
+      file1Data = wb;
+    } else {
+      if (!Array.isArray(file2Data)) file2Data = [];
+      file2Data.push(wb);
+    }
     nameEl.innerHTML = '';
     const span = document.createElement('span');
     span.textContent = `✓ ${f.name}`;
@@ -445,7 +453,7 @@ async function handleFile(f, nameEl, slot) {
     btn.addEventListener('click', () => clearFile(slot));
     nameEl.appendChild(span);
     nameEl.appendChild(btn);
-    $('run').disabled = !(file1Data || file2Data);
+    $('run').disabled = !(file1Data || (Array.isArray(file2Data) && file2Data.length));
   } catch (e) {
     nameEl.textContent = `✗ 읽기 실패: ${e.message}`;
   }
@@ -454,7 +462,7 @@ async function handleFile(f, nameEl, slot) {
 function clearFile(slot) {
   if (slot === 1) { file1Data = null; $('f1').value = ''; $('n1').innerHTML = ''; }
   else            { file2Data = null; $('f2').value = ''; $('n2').innerHTML = ''; }
-  $('run').disabled = !(file1Data || file2Data);
+  $('run').disabled = !(file1Data || (Array.isArray(file2Data) && file2Data.length));
 }
 
 // ============ Supabase I/O ============
@@ -496,8 +504,9 @@ async function runAnalysis() {
     }
 
     let newOrders = 0;
-    if (file2Data) {
-      const orders = parseOrderFile(file2Data);
+    if (file2Data && (Array.isArray(file2Data) ? file2Data.length : true)) {
+      const wbs = Array.isArray(file2Data) ? file2Data : [file2Data];
+      const orders = wbs.flatMap(wb => parseOrderFile(wb));
       const existingIds = new Set(cache.orders.map(o => o.order_id));
       const newRows = [];
       for (const o of orders) {
