@@ -1045,7 +1045,13 @@ function buildVendorRow(vendorId, d) {
     r['수취인 주소'] = addr;
     r['배송시 요청사항'] = memo;
     r['수량'] = qty;
-    r['상품명'] = product;
+    // 팜플러스만 옵션값(키로수 구분 필요), 나머지는 상품명
+    if (vendorId === 'palm') {
+      var opt = d['옵션정보'] || d['등록옵션명'] || d['옵션명'] || d['노출상품명(옵션명)'] || '';
+      r['상품명'] = String(opt).trim() || product;
+    } else {
+      r['상품명'] = product;
+    }
     r['운송장번호'] = '';
     return r;
   }
