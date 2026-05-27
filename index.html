@@ -1067,7 +1067,11 @@ function buildVendorRow(vendorId, d) {
     var r3 = {};
     r3['주문번호'] = orderId; r3['쇼핑몰명'] = channel; r3['받는사람'] = name;
     r3['전화번호1'] = phone; r3['우편번호'] = zip; r3['주소'] = addr;
-    r3['상품명1'] = product; r3['수량'] = qty;
+    // 주미겸: 상품명 + 옵션값 합쳐서 키로수 표시
+    var jumiOpt = (d['옵션정보'] || d['등록옵션명'] || d['옵션명'] || d['노출상품명(옵션명)'] || '').toString().trim();
+    var jumiName = jumiOpt && String(product).indexOf(jumiOpt) < 0 ? (product + ',' + jumiOpt) : product;
+    r3['상품명1'] = jumiName;
+    r3['수량'] = qty;
     r3['배송메시지'] = memo; r3['운송장번호'] = '';
     return r3;
   }
