@@ -1059,7 +1059,12 @@ function buildVendorRow(vendorId, d) {
     var r2 = {};
     r2['주문번호'] = orderId; r2['쇼핑몰명'] = channel; r2['받는사람'] = name;
     r2['전화번호1'] = phone; r2['우편번호'] = zip; r2['주소'] = addr;
-    r2['수량(A타입)'] = ''; r2['상품명1'] = product; r2['내품수량1'] = qty;
+    r2['수량(A타입)'] = '';
+    // 한돈두돈: 상품명 + 옵션값 합쳐서 키로수 표시
+    var hOpt = (d['옵션정보'] || d['등록옵션명'] || d['옵션명'] || d['노출상품명(옵션명)'] || '').toString().trim();
+    var hName = hOpt && String(product).indexOf(hOpt) < 0 ? (product + ',' + hOpt) : product;
+    r2['상품명1'] = hName;
+    r2['내품수량1'] = qty;
     r2['배송메시지'] = memo;
     return r2;
   }
