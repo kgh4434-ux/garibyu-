@@ -371,9 +371,9 @@ function parseReviewFile(wb) {
 
 // 다양한 형식의 주문 파일을 자동 인식해 표준 키(__order_id, __name, __phone, __addr, __zip)로 정규화
 const ORDER_ALIAS = {
-  order_id: ['상품주문번호', '주문번호', '관리번호'],
-  name:     ['수령자이름', '수취인명', '수취인', '수취인이름'],
-  phone:    ['수령자휴대폰', '수취인연락처1', '수취인연락처', '수령자전화', '연락처', '수취인전화번호'],
+  order_id: ['상품주문번호', '주문상품번호', '주문번호', '관리번호'],
+  name:     ['수령자이름', '수취인명', '수취인', '수취인이름', '수령인명'],
+  phone:    ['수령자휴대폰', '수취인연락처1', '수취인연락처', '수령자전화', '연락처', '수취인전화번호', '수령인 연락처', '구매자 연락처'],
   addr:     ['수령자주소', '통합배송지', '기본배송지', '배송지', '수취인 주소'],
   zip:      ['수령자우편번호', '우편번호'],
   product:  ['상품명', '등록상품명', '노출상품명(옵션명)'],
@@ -421,6 +421,8 @@ function parseOrderFile(wb) {
     obj.__product  = pick(obj, ORDER_ALIAS.product);
     obj.__invoice  = pick(obj, ORDER_ALIAS.invoice);
     if (!obj.__order_id) continue;
+    // 안내행 스킵: 주문번호에 한글이 있으면 실제 주문이 아님 (예: 토스의 "수정 불가")
+    if (/[가-힣]/.test(String(obj.__order_id).trim())) continue;
     orders.push(obj);
   }
   return orders;
