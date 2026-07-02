@@ -1045,10 +1045,19 @@ function buildVendorRow(vendorId, d) {
     r['수취인 주소'] = addr;
     r['배송시 요청사항'] = memo;
     r['수량'] = qty;
-    // 팜플러스만 옵션값(키로수 구분 필요), 나머지는 상품명
+    // 팜플러스: 네이버는 옵션정보 단독(정보 풍부), 쿠팡은 상품명+옵션 합쳐야 상품 식별 가능
     if (vendorId === 'palm') {
-      var opt = d['옵션정보'] || d['등록옵션명'] || d['옵션명'] || d['노출상품명(옵션명)'] || '';
-      r['상품명'] = String(opt).trim() || product;
+      var optNaver = (d['옵션정보'] || '').toString().trim();
+      if (optNaver) {
+        r['상품명'] = optNaver;
+      } else {
+        var optCoupang = (d['등록옵션명'] || d['옵션명'] || d['노출상품명(옵션명)'] || '').toString().trim();
+        if (optCoupang && String(product).indexOf(optCoupang) < 0) {
+          r['상품명'] = product + ',' + optCoupang;
+        } else {
+          r['상품명'] = product || optCoupang;
+        }
+      }
     } else {
       r['상품명'] = product;
     }
