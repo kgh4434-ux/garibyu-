@@ -557,6 +557,8 @@ async function runAnalysis() {
     }
     const updates = [];
     for (const o of cache.orders) {
+      // 수동 승격(NP|)은 재평가 시 유지 — 이름+상품 매칭한 케이스
+      if (o.match_key && String(o.match_key).indexOf('NP|') === 0) continue;
       const orderKeys = buildMatchKeyList(o.data, 'order', mode);
       let md = null, matchedKey = '';
       for (const k of orderKeys) {
@@ -932,6 +934,8 @@ async function reevaluate() {
     }
     const updates = [];
     for (const o of cache.orders) {
+      // 수동 승격(NP|)은 재평가 유지
+      if (o.match_key && String(o.match_key).indexOf('NP|') === 0) continue;
       const orderKeys = buildMatchKeyList(o.data, 'order', mode);
       let md = null, matchedKey = '';
       for (const k of orderKeys) {
