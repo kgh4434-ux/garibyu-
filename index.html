@@ -634,9 +634,18 @@ function computeSuspectFreq() {
 
 function dbToUi(row, freq) {
   const d = row.data || {};
-  const n2 = name2(d.__name || d['수령자이름'] || d['수취인명'] || '');
-  const t4 = tail4(d.__phone || d['수령자휴대폰'] || d['수취인연락처1'] || '');
-  const z  = String(d.__zip || d['수령자우편번호'] || d['우편번호'] || '').trim();
+  // 채널 통합 정규화 (네이버·쿠팡·토스 컬럼명 차이 흡수)
+  const _수취인 = d.__name || d['수취인명'] || d['수취인이름'] || d['수령인명'] || d['수령자이름'] || d['수취인'] || '';
+  const _전화 = d.__phone || d['수취인연락처1'] || d['수취인전화번호'] || d['수령인 연락처'] || d['수령자휴대폰'] || d['연락처'] || '';
+  const _우편 = d.__zip || d['우편번호'] || d['수령자우편번호'] || '';
+  const _주소 = d.__addr || d['수취인 주소'] || d['통합배송지'] || d['수령자주소'] || d['배송지'] || d['기본배송지'] || '';
+  const _상품 = d.__product || d['상품명'] || d['등록상품명'] || d['상품명1'] || '';
+  const _주문ID = d.__order_id || d['상품주문번호'] || d['주문상품번호'] || d['주문번호'] || d['관리번호'] || '';
+  const _송장 = d.__invoice || d['송장번호'] || d['운송장번호'] || '';
+  const _채널 = d._channel || d['판매채널'] || d['쇼핑몰명'] || '';
+  const n2 = name2(_수취인);
+  const t4 = tail4(_전화);
+  const z  = String(_우편).trim();
   let suspect = '';
   if (freq && n2 && t4) {
     const cnt = freq.personFreq.get(n2 + '|' + t4) || 0;
@@ -653,6 +662,7 @@ function dbToUi(row, freq) {
     _메모: row.memo || '',
     _구분: row.category,
     _의심: suspect.trim(),
+    _채널, _수취인, _전화, _우편, _주소, _상품, _주문ID, _송장,
     _매칭키: row.match_key || '',
     _참여ID: row.participant_id || '',
     _리뷰시트: row.review_sheet || '',
@@ -680,7 +690,7 @@ function applyFilters(rows) {
     if (statusF === 'todo' && r._상태 === '완료') return false;
     if (statusF === 'done' && r._상태 !== '완료') return false;
     if (q) {
-      const blob = [r['수령자이름'], r['수령자휴대폰'], r['주문번호'], r['관리번호'], r['상품명'], r['수령자주소'], r._메모].join(' ').toLowerCase();
+      const blob = [r._수취인, r._전화, r._주문ID, r._상품, r._주소, r._메모, r['수취인명'], r['수취인이름'], r['수령인명']].join(' ').toLowerCase();
       if (!blob.includes(q)) return false;
     }
     return true;
@@ -726,11 +736,10 @@ function renderTab(tab) {
 
   const priorityCols = isOrderTab
     ? ['_수집일자', '_메모', '_구분', '_의심',
-       '주문번호', '상품주문번호', '관리번호',
-       '수령자이름', '수취인명',
-       '수령자휴대폰', '수취인연락처1',
-       '송장번호', '상품명',
-       '수령자주소', '통합배송지',
+       '_채널', '_주문ID',
+       '_수취인', '_전화',
+       '_송장', '_상품',
+       '_주소', '_우편',
        '_참여ID', '_매칭키']
     : ['_수집일자', '시트', '수취인', '연락처', '참여ID', '배송지', '결제금액'];
   const allCols = new Set();
