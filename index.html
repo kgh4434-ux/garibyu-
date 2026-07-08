@@ -414,6 +414,11 @@ function parseOrderFile(wb) {
     header.forEach((h, j) => { if (h) obj[h] = r[j]; });
     if (String(obj['관리번호'] ?? '').trim() === '합계') continue;
     obj.__order_id = pick(obj, ORDER_ALIAS.order_id);
+    // 쿠팡: 주문번호가 결제 단위라 같은 결제에 여러 상품이면 order_id 충돌 → 옵션ID/상품ID 붙여 라인 단위 고유화
+    if (obj.__order_id && !obj['상품주문번호'] && !obj['주문상품번호']) {
+      const optId = obj['옵션ID'] || obj['상품ID'] || obj['노출상품ID'] || obj['옵션 관리 코드'] || '';
+      if (optId) obj.__order_id = String(obj.__order_id) + '_' + String(optId);
+    }
     obj.__name     = pick(obj, ORDER_ALIAS.name);
     obj.__phone    = pick(obj, ORDER_ALIAS.phone);
     obj.__addr     = pick(obj, ORDER_ALIAS.addr);
