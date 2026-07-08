@@ -305,7 +305,7 @@ function toast(msg, isErr) {
 
 function digits(s) { return String(s ?? '').replace(/\D/g, ''); }
 function tail4(s) { const d = digits(s); return d.length >= 4 ? d.slice(-4) : ''; }
-function name2(s) { return String(s ?? '').replace(/[^가-힣a-zA-Z]/g, '').slice(0, 2); }
+function name2(s) { return String(s ?? '').replace(/[^가-힣a-zA-Z]/g, ''); } // 이름 전체 (마스킹 데이터 안 쓰므로 앞2자 축약 제거)
 
 function buildMatchKey(row, type, mode) {
   const phoneField = type === 'reviewer' ? row['연락처'] : (row.__phone ?? row['수령자휴대폰'] ?? row['수취인연락처1']);
