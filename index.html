@@ -227,7 +227,7 @@
 <div id="page-collect" class="page">
   <h2 style="margin:0 0 6px;font-size:18px;">주문수집 → 거래처별 발주 변환</h2>
   <p style="color:var(--muted);font-size:13px;margin:0 0 16px;">네이버·쿠팡 주문 파일을 업로드 → 거래처별로 자동 분류 → 양식대로 다운로드.</p>
-  <div class="grid">
+  <div class="grid" style="grid-template-columns:1fr 1fr 1fr;">
     <div class="card">
       <h3>① 네이버 스마트스토어 (.xlsx) — 비번 0000 자동 해제</h3>
       <div class="upload">
@@ -244,6 +244,13 @@
       <div class="upload">
         <input type="file" id="cf2" accept=".xlsx,.xls" />
         <div class="filename" id="cn2"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>③ 토스 주문배송관리 (.xlsx)</h3>
+      <div class="upload">
+        <input type="file" id="cf3" accept=".xlsx,.xls" />
+        <div class="filename" id="cn3"></div>
       </div>
     </div>
   </div>
@@ -1018,6 +1025,7 @@ function isInternalCheck(productName) {
 // 주문수집 슬롯
 var collect_smart_wb = null;
 var collect_coupang_wb = null;
+var collect_toss_wb = null;
 var collect_results_groups = null;
 
 async function handleCollectFile(slotKey, fileEl, nameEl) {
@@ -1026,18 +1034,21 @@ async function handleCollectFile(slotKey, fileEl, nameEl) {
   try {
     var wb = await loadFile(f);
     if (slotKey === 'smart') collect_smart_wb = wb;
-    else collect_coupang_wb = wb;
+    else if (slotKey === 'coupang') collect_coupang_wb = wb;
+    else if (slotKey === 'toss') collect_toss_wb = wb;
     nameEl.textContent = '✓ ' + f.name;
-    document.getElementById('dispatchBtn').disabled = !(collect_smart_wb || collect_coupang_wb);
+    document.getElementById('dispatchBtn').disabled = !(collect_smart_wb || collect_coupang_wb || collect_toss_wb);
   } catch (e) {
     nameEl.textContent = '✗ 읽기 실패: ' + (e.message || e);
   }
 }
 
 function clearCollectFiles() {
-  collect_smart_wb = null; collect_coupang_wb = null;
+  collect_smart_wb = null; collect_coupang_wb = null; collect_toss_wb = null;
   document.getElementById('cf1').value = ''; document.getElementById('cn1').textContent = '';
   document.getElementById('cf2').value = ''; document.getElementById('cn2').textContent = '';
+  var cf3 = document.getElementById('cf3'); if (cf3) cf3.value = '';
+  var cn3 = document.getElementById('cn3'); if (cn3) cn3.textContent = '';
   document.getElementById('dispatchBtn').disabled = true;
   document.getElementById('vendorArea').innerHTML = '<div class="empty" style="padding:30px;text-align:center;color:var(--muted);">변환 결과가 여기에 표시됩니다.</div>';
   document.getElementById('dispatchStatus').textContent = '파일을 1개 이상 업로드 후 변환 실행';
@@ -1156,6 +1167,10 @@ async function dispatchOrders() {
     if (collect_coupang_wb) {
       var cp = parseOrderFile(collect_coupang_wb);
       cp.forEach(function(d){ d._source = 'coupang'; d._source_label = '쿠팡'; allRows.push(d); });
+    }
+    if (collect_toss_wb) {
+      var ts = parseOrderFile(collect_toss_wb);
+      ts.forEach(function(d){ d._source = 'toss'; d._source_label = '토스'; allRows.push(d); });
     }
 
     // 거래처 분류
@@ -1309,6 +1324,7 @@ async function loadDispatchHistory() {
 // 주문수집 바인딩
 document.getElementById('cf1').addEventListener('change', function(){ handleCollectFile('smart', this, document.getElementById('cn1')); });
 document.getElementById('cf2').addEventListener('change', function(){ handleCollectFile('coupang', this, document.getElementById('cn2')); });
+var cf3 = document.getElementById('cf3'); if (cf3) cf3.addEventListener('change', function(){ handleCollectFile('toss', this, document.getElementById('cn3')); });
 document.getElementById('dispatchBtn').addEventListener('click', dispatchOrders);
 document.getElementById('dispatchClearBtn').addEventListener('click', clearCollectFiles);
 var hr = document.getElementById('dispHistoryRefresh'); if (hr) hr.addEventListener('click', loadDispatchHistory);
