@@ -1061,7 +1061,7 @@ function buildVendorRow(vendorId, d) {
   var addr = d.__addr || d['수령자주소'] || d['통합배송지'] || d['수취인 주소'] || '';
   var product = d.__product || d['상품명'] || d['등록상품명'] || '';
   var orderId = d.__order_id || d['주문번호'] || d['상품주문번호'] || '';
-  var qty = d['주문수량'] || d['수량'] || d['상품수량'] || d['구매수(수량)'] || 1;
+  var qty = d['주문수량'] || d['수량'] || d['상품수량'] || d['구매수(수량)'] || d['주문건수'] || 1;
   var memo = d['배송메모'] || d['배송메세지'] || d['배송시 요청사항'] || '';
   var channel = d['판매채널'] || d['판매처'] || d['_source_label'] || '';
 
